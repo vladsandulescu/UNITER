@@ -23,7 +23,7 @@ from data import (DistributedTokenBucketSampler,
                   HMDataset, HMEvalDataset,
                   hm_collate, hm_eval_collate,
                   PrefetchLoader)
-from model.hm import (UniterForHm, UniterForHmPaired, UniterForHmPairedAttn)
+from model.hm import (UniterForHm)
 from optim import get_lr_sched
 from optim.misc import build_optimizer
 
@@ -85,10 +85,6 @@ def main(opts):
     eval_collate_fn = hm_eval_collate
     if opts.model == 'cls':
         ModelCls = UniterForHm
-    elif opts.model == 'paired':
-        ModelCls = UniterForHmPaired
-    elif opts.model == 'paired-attn':
-        ModelCls = UniterForHmPairedAttn
     else:
         raise ValueError('unrecognized model type')
 
@@ -225,7 +221,7 @@ def main(opts):
                           ]:
         LOGGER.info(f"Step {global_step}: start running "
                     f"validation on {split} split...")
-        log, results = validate(model, loader, split, end_of_epoch=True)
+        log, results = validate(model, loader, split)
         with open(f'{opts.output_dir}/results/'
                   f'{split}_results_{global_step}_'
                   f'rank{rank}_final.csv', 'w') as f:
@@ -277,7 +273,7 @@ def validate(model, val_loader, split):
                f'valid/{split}_ex_per_s': n_ex/tot_time}
     model.train()
     LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
-                f"val Acc: {val_acc:.2f}, val AUROC: {val_auroc:.2f}")
+                f"val Acc: {val_acc:.4f}, val AUROC: {val_auroc:.4f}")
     return val_log, results
 
 
