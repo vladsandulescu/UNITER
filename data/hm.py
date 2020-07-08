@@ -149,7 +149,7 @@ class HMDataset(Dataset):
         return len(self.database)
 
 
-def hm_collate(inputs):
+def hm_collate(inputs, test_mode=False):
     (input_ids, img_feats, img_pos_feats, attn_masks,
      img_type_ids) = map(list, unzip(concat(outs for outs, _ in inputs)))
 
@@ -169,20 +169,30 @@ def hm_collate(inputs):
                                     batch_first=True, padding_value=0)
 
     attn_masks = pad_sequence(attn_masks, batch_first=True, padding_value=0)
-    targets = torch.Tensor([t for _, t in inputs]).long()
+    if not test_mode:
+        targets = torch.Tensor([t for _, t in inputs]).long()
 
     bs, max_tl = input_ids.size()
     out_size = attn_masks.size(1)
     gather_index = get_gather_index(txt_lens, num_bbs, bs, max_tl, out_size)
 
-    batch = {'input_ids': input_ids,
-             'position_ids': position_ids,
-             'img_feat': img_feat,
-             'img_pos_feat': img_pos_feat,
-             'attn_masks': attn_masks,
-             'gather_index': gather_index,
-             'img_type_ids': img_type_ids,
-             'targets': targets}
+    if not test_mode:
+        batch = {'input_ids': input_ids,
+                 'position_ids': position_ids,
+                 'img_feat': img_feat,
+                 'img_pos_feat': img_pos_feat,
+                 'attn_masks': attn_masks,
+                 'gather_index': gather_index,
+                 'img_type_ids': img_type_ids,
+                 'targets': targets}
+    else:
+        batch = {'input_ids': input_ids,
+                 'position_ids': position_ids,
+                 'img_feat': img_feat,
+                 'img_pos_feat': img_pos_feat,
+                 'attn_masks': attn_masks,
+                 'gather_index': gather_index,
+                 'img_type_ids': img_type_ids}
     batch = default_none_dict(batch)
 
     return batch
@@ -201,5 +211,22 @@ def hm_eval_collate(inputs):
         img_ids.append(id_)
         batch.append(tensors)
     batch = hm_collate(batch)
+    batch['img_ids'] = img_ids
+    return batch
+
+
+class HMTestDataset(HMDataset):
+    def __getitem__(self, i):
+        img_id = self.database[i]['img_id']
+        outs, _ = super().__getitem__(i)
+        return img_id, outs, _
+
+
+def hm_test_collate(inputs):
+    img_ids, batch = [], []
+    for id_, *tensors in inputs:
+        img_ids.append(id_)
+        batch.append(tensors)
+    batch = hm_collate(batch, test_mode=True)
     batch['img_ids'] = img_ids
     return batch
