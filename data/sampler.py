@@ -12,12 +12,13 @@ from cytoolz import partition_all
 
 class TokenBucketSampler(Sampler):
     def __init__(self, lens, bucket_size, batch_size,
-                 droplast=False, size_multiple=8):
+                 droplast=False, size_multiple=8, shuffle=True):
         self._lens = lens
         self._max_tok = batch_size
         self._bucket_size = bucket_size
         self._droplast = droplast
         self._size_mul = size_multiple
+        self.shuffle = shuffle
 
     def _create_ids(self):
         return list(range(len(self._lens)))
@@ -27,10 +28,14 @@ class TokenBucketSampler(Sampler):
 
     def __iter__(self):
         ids = self._create_ids()
-        random.shuffle(ids)
-        buckets = [sorted(ids[i:i+self._bucket_size],
-                          key=self._sort_fn, reverse=True)
-                   for i in range(0, len(ids), self._bucket_size)]
+        if self.shuffle:
+            random.shuffle(ids)
+            buckets = [sorted(ids[i:i+self._bucket_size],
+                              key=self._sort_fn, reverse=True)
+                       for i in range(0, len(ids), self._bucket_size)]
+        else:
+            buckets = [ids[i:i+self._bucket_size]
+                       for i in range(0, len(ids), self._bucket_size)]
         # fill batches until max_token (include padding)
         batches = []
         for bucket in buckets:
@@ -50,7 +55,8 @@ class TokenBucketSampler(Sampler):
                     batch_indices.extend(indices)
             if not self._droplast and batch_indices:
                 batches.append(batch_indices)
-        random.shuffle(batches)
+        if self.shuffle:
+            random.shuffle(batches)
         return iter(batches)
 
     def __len__(self):
