@@ -54,7 +54,7 @@ def create_dataloader(opts, dataset_cls, collate_fn, mode='train'):
     sampler = DistributedTokenBucketSampler(
         hvd.size(), hvd.rank(), dataset.lens,
         bucket_size=BUCKET_SIZE, batch_size=batch_size,
-        droplast=(mode == 'train'))
+        droplast=(mode == 'train'), shuffle=(mode == 'train'))
     loader = DataLoader(dataset, batch_sampler=sampler,
                         num_workers=opts.n_workers, pin_memory=opts.pin_mem,
                         collate_fn=collate_fn)
@@ -112,7 +112,11 @@ def main(opts):
     # Prepare optimizer
     optimizer = build_optimizer(model, opts)
     model, optimizer = amp.initialize(model, optimizer,
-                                      enabled=opts.fp16, opt_level='O2')
+                                      enabled=opts.fp16, opt_level='O2',
+                                      keep_batchnorm_fp32=False,
+                                      loss_scale=128.0,
+                                      min_loss_scale=128.0
+                                      )
 
     global_step = 0
     if rank == 0:
