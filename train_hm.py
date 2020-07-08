@@ -20,8 +20,8 @@ from horovod import torch as hvd
 from tqdm import tqdm
 
 from data import (DistributedTokenBucketSampler,
-                  HMDataset, HMEvalDataset,
-                  hm_collate, hm_eval_collate,
+                  HMDataset, HMEvalDataset, HMTestDataset,
+                  hm_collate, hm_eval_collate, hm_test_collate,
                   PrefetchLoader)
 from model.hm import (UniterForHm)
 from optim import get_lr_sched
@@ -81,8 +81,10 @@ def main(opts):
 
     DatasetCls = HMDataset
     EvalDatasetCls = HMEvalDataset
+    TestDatasetCls = HMTestDataset
     collate_fn = hm_collate
     eval_collate_fn = hm_eval_collate
+    test_collate_fn = hm_test_collate
     if opts.model == 'cls':
         ModelCls = UniterForHm
     else:
@@ -91,7 +93,7 @@ def main(opts):
     # data loaders
     train_dataloader = create_dataloader(opts, DatasetCls, collate_fn, mode='train')
     val_dataloader = create_dataloader(opts, EvalDatasetCls, eval_collate_fn, mode='val')
-    test_dataloader = create_dataloader(opts, EvalDatasetCls, eval_collate_fn, mode='test')
+    test_dataloader = create_dataloader(opts, TestDatasetCls, test_collate_fn, mode='test')
 
     # Prepare model
     if opts.checkpoint:
@@ -196,17 +198,27 @@ def main(opts):
                                          ex_per_sec, global_step)
 
                 if global_step % opts.valid_steps == 0:
-                    for split, loader in [('val', val_dataloader),
-                                          # ('test', test_dataloader)
-                                          ]:
+                    for split, loader in [('val', val_dataloader), ('test', test_dataloader)]:
                         LOGGER.info(f"Step {global_step}: start running "
                                     f"validation on {split} split...")
                         log, results = validate(model, loader, split)
                         with open(f'{opts.output_dir}/results/'
                                   f'{split}_results_{global_step}_'
                                   f'rank{rank}.csv', 'w') as f:
-                            for id_, pred, prob, label in results:
-                                f.write(f'{id_},{pred},{prob},{label}\n')
+                            if split != 'test':
+                                f.write("id,proba,label,target\n")
+                                for id_, pred, prob, label in results:
+                                    padded_id = id_
+                                    if len(id_) == 4:
+                                        padded_id = "0" + str(id_)
+                                    f.write(f'{padded_id},{prob},{pred},{label}\n')
+                            else:
+                                f.write("id,proba,label\n")
+                                for id_, pred, prob in results:
+                                    padded_id = id_
+                                    if len(id_) == 4:
+                                        padded_id = "0" + str(id_)
+                                    f.write(f'{padded_id},{prob},{pred}\n')
                         TB_LOGGER.log_scaler_dict(log)
                     model_saver.save(model, global_step)
             if global_step >= opts.num_train_steps:
@@ -216,17 +228,27 @@ def main(opts):
         n_epoch += 1
         if global_step % opts.valid_steps == 0:
             LOGGER.info(f"Step {global_step}: finished {n_epoch} epochs")
-    for split, loader in [('val', val_dataloader),
-                          # ('test', test_dataloader)
-                          ]:
+    for split, loader in [('val', val_dataloader), ('test', test_dataloader)]:
         LOGGER.info(f"Step {global_step}: start running "
                     f"validation on {split} split...")
         log, results = validate(model, loader, split)
         with open(f'{opts.output_dir}/results/'
                   f'{split}_results_{global_step}_'
                   f'rank{rank}_final.csv', 'w') as f:
-            for id_, pred, prob, label in results:
-                f.write(f'{id_},{pred},{prob},{label}\n')
+            if split != 'test':
+                f.write("id,proba,label,target\n")
+                for id_, pred, prob, label in results:
+                    padded_id = id_
+                    if len(id_) == 4:
+                        padded_id = "0" + str(id_)
+                    f.write(f'{padded_id},{prob},{pred},{label}\n')
+            else:
+                f.write("id,proba,label\n")
+                for id_, pred, prob in results:
+                    padded_id = id_
+                    if len(id_) == 4:
+                        padded_id = "0" + str(id_)
+                    f.write(f'{padded_id},{prob},{pred}\n')
         TB_LOGGER.log_scaler_dict(log)
     model_saver.save(model, f'{global_step}_final')
 
@@ -239,42 +261,50 @@ def validate(model, val_loader, split):
     n_ex = 0
     st = time()
     results = []
+    test_mode = (split == 'test')
     for i, batch in enumerate(val_loader):
         img_ids = batch['img_ids']
-        targets = batch['targets']
-        del batch['targets']
+        if not test_mode:
+            targets = batch['targets']
+            del batch['targets']
         del batch['img_ids']
         scores = model(**batch, targets=None, compute_loss=False)
-        loss = F.cross_entropy(scores, targets, reduction='sum')
-        val_loss += loss.item()
-        tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets
+        if not test_mode:
+            loss = F.cross_entropy(scores, targets, reduction='sum')
+            val_loss += loss.item()
+            tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets
                       ).sum().item()
         predictions = scores.max(dim=-1, keepdim=False)[1].cpu().tolist()
 
         logits = F.softmax(scores, -1)
         probs = logits[:, 1].cpu().tolist()
-        labels = targets.cpu().tolist()
-
-        results.extend(zip(img_ids, predictions, probs, labels))
+        if not test_mode:
+            labels = targets.cpu().tolist()
+            results.extend(zip(img_ids, predictions, probs, labels))
+        else:
+            results.extend(zip(img_ids, predictions, probs))
         n_ex += len(img_ids)
-    val_loss = sum(all_gather_list(val_loss))
-    tot_score = sum(all_gather_list(tot_score))
-    n_ex = sum(all_gather_list(n_ex))
-    tot_time = time()-st
-    val_loss /= n_ex
-    val_acc = tot_score / n_ex
+    if not test_mode:
+        val_loss = sum(all_gather_list(val_loss))
+        tot_score = sum(all_gather_list(tot_score))
+        n_ex = sum(all_gather_list(n_ex))
+        tot_time = time()-st
+        val_loss /= n_ex
+        val_acc = tot_score / n_ex
 
-    res_img_ids, res_predictions, res_probs, res_labels = list(zip(*results))
-    val_auroc = roc_auc_score(res_labels, res_probs)
+        res_img_ids, res_predictions, res_probs, res_labels = list(zip(*results))
+        val_auroc = roc_auc_score(res_labels, res_probs)
 
-    val_log = {f'valid/{split}_loss': val_loss,
-               f'valid/{split}_acc': val_acc,
-               f'valid/{split}_AUROC': val_auroc,
-               f'valid/{split}_ex_per_s': n_ex/tot_time}
-    model.train()
-    LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
-                f"val Acc: {val_acc:.4f}, val AUROC: {val_auroc:.4f}")
-    return val_log, results
+        val_log = {f'valid/{split}_loss': val_loss,
+                   f'valid/{split}_acc': val_acc,
+                   f'valid/{split}_AUROC': val_auroc,
+                   f'valid/{split}_ex_per_s': n_ex/tot_time}
+        model.train()
+        LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
+                    f"val Acc: {val_acc:.4f}, val AUROC: {val_auroc:.4f}")
+        return val_log, results
+    else:
+        return {f'generate/{split}': 1}, results
 
 
 if __name__ == "__main__":
