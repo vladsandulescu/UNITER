@@ -197,7 +197,8 @@ def main(opts):
                     ex_per_sec = int(tot_ex / (time()-start))
                     LOGGER.info(f'Step {global_step}: '
                                 f'{tot_ex} examples trained at '
-                                f'{ex_per_sec} ex/s')
+                                f'{ex_per_sec} ex/s, '
+                                f'Loss: {loss}')
                     TB_LOGGER.add_scalar('perf/ex_per_s',
                                          ex_per_sec, global_step)
 
