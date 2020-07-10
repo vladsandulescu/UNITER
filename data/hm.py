@@ -38,12 +38,15 @@ class HMDataset(Dataset):
         super(HMDataset, self).__init__()
 
         precomputed_boxes = {
-            # 'train': "tiny_data_train_d2_36-36_batch.tsv",
+            # "train": "tiny_data_train_d2_36-36_batch.tsv",
             # "dev": "tiny_data_dev_d2_36-36_batch.tsv",
             # "test": "tiny_data_test_d2_36-36_batch.tsv",
-            'train': "data_train_d2_36-36_batch.tsv",
+            "train": "data_train_d2_36-36_batch.tsv",
             "dev": "data_dev_d2_36-36_batch.tsv",
             "test": "data_test_d2_36-36_batch.tsv",
+            # "train": "data_train_d2_10-100_batch.tsv",
+            # "dev": "data_dev_d2_10-100_batch.tsv",
+            # "test": "data_test_d2_10-100_batch.tsv",
         }
 
         self.boxes = boxes
