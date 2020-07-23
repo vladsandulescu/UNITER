@@ -54,7 +54,7 @@ def create_dataloader(opts, dataset_cls, collate_fn, mode='train'):
     sampler = DistributedTokenBucketSampler(
         hvd.size(), hvd.rank(), dataset.lens,
         bucket_size=BUCKET_SIZE, batch_size=batch_size,
-        droplast=(mode == 'train'), shuffle=(mode == 'train'))
+        droplast=False, shuffle=(mode == 'train'))
     loader = DataLoader(dataset, batch_sampler=sampler,
                         num_workers=opts.n_workers, pin_memory=opts.pin_mem,
                         collate_fn=collate_fn)
@@ -280,9 +280,7 @@ def validate(model, val_loader, split):
             tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets
                       ).sum().item()
         predictions = scores.max(dim=-1, keepdim=False)[1].cpu().tolist()
-
-        logits = F.softmax(scores, -1)
-        probs = logits[:, 1].cpu().tolist()
+        probs = F.softmax(scores, dim=1)[:, 1].cpu().tolist()
         if not test_mode:
             labels = targets.cpu().tolist()
             results.extend(zip(img_ids, predictions, probs, labels))
