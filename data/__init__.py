@@ -5,6 +5,7 @@ Licensed under the MIT license.
 """
 from .data import TxtTokLmdb, DetectFeatLmdb
 from .sampler import TokenBucketSampler, DistributedTokenBucketSampler
+from .hm_sampler import HMSampler
 from .loader import PrefetchLoader
 from .nlvr2 import (Nlvr2PairedDataset, Nlvr2PairedEvalDataset,
                     Nlvr2TripletDataset, Nlvr2TripletEvalDataset,

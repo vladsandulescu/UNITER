@@ -1,7 +1,7 @@
 {
     "root_path": "./",
     "dataset_path": "./../../data",
-    "train_image_set": "train+dev",
+    "train_image_set": "train",
     "val_image_set": "dev",
     "test_image_set": "test",
     "checkpoint": "./storage/pretrained/uniter-base.pt",

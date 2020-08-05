@@ -19,7 +19,7 @@ from horovod import torch as hvd
 
 from tqdm import tqdm
 
-from data import (DistributedTokenBucketSampler,
+from data import (DistributedTokenBucketSampler, HMSampler,
                   HMDataset, HMEvalDataset, HMTestDataset,
                   hm_collate, hm_eval_collate, hm_test_collate,
                   PrefetchLoader)
@@ -51,10 +51,14 @@ def create_dataloader(opts, dataset_cls, collate_fn, mode='train'):
 
     dataset = dataset_cls(image_set, opts.root_path, opts.dataset_path,
                        use_img_type=opts.use_img_type, test_mode=(mode == 'test'))
-    sampler = DistributedTokenBucketSampler(
-        hvd.size(), hvd.rank(), dataset.lens,
-        bucket_size=BUCKET_SIZE, batch_size=batch_size,
-        droplast=False, shuffle=(mode == 'train'))
+    if mode == 'train':
+        labels = [idb['label'] for idb in dataset.database]
+        sampler = HMSampler(labels, 64, replacement=True)
+    else:
+        sampler = DistributedTokenBucketSampler(
+            hvd.size(), hvd.rank(), dataset.lens,
+            bucket_size=BUCKET_SIZE, batch_size=batch_size,
+            droplast=False, shuffle=(mode == 'train'))
     loader = DataLoader(dataset, batch_sampler=sampler,
                         num_workers=opts.n_workers, pin_memory=opts.pin_mem,
                         collate_fn=collate_fn)
