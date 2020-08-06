@@ -276,12 +276,11 @@ def validate(model, val_loader, split):
         del batch['img_ids']
         scores = model(**batch, targets=None, compute_loss=False)
         if not test_mode:
-            loss = F.cross_entropy(scores, targets, reduction='sum')
+            loss = F.binary_cross_entropy_with_logits(scores, targets.to(dtype=scores.dtype), reduction='sum')
             val_loss += loss.item()
-            tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets
-                      ).sum().item()
-        predictions = scores.max(dim=-1, keepdim=False)[1].cpu().tolist()
-        probs = F.softmax(scores, dim=1)[:, 1].cpu().tolist()
+            tot_score += ((scores > .5).to(dtype=targets.dtype) == targets).sum().item()
+        predictions = (scores > .5).to(dtype=torch.int).cpu().tolist()
+        probs = torch.sigmoid(scores).cpu().tolist()
         if not test_mode:
             labels = targets.cpu().tolist()
             results.extend(zip(img_ids, predictions, probs, labels))
