@@ -278,9 +278,9 @@ def validate(model, val_loader, split):
         if not test_mode:
             loss = F.binary_cross_entropy_with_logits(scores, targets.to(dtype=scores.dtype), reduction='sum')
             val_loss += loss.item()
-            tot_score += ((scores > .5).to(dtype=targets.dtype) == targets).sum().item()
-        predictions = (scores > .5).to(dtype=torch.int).cpu().tolist()
+            tot_score += ((scores > 0.5).to(dtype=targets.dtype) == targets).sum().item()
         probs = torch.sigmoid(scores).cpu().tolist()
+        predictions = [1 if prob > 0.5 else 0 for prob in probs]
         if not test_mode:
             labels = targets.cpu().tolist()
             results.extend(zip(img_ids, predictions, probs, labels))
