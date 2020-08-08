@@ -34,6 +34,7 @@ from utils.save import ModelSaver, save_training_meta
 from utils.misc import NoOp, parse_with_config, set_dropout, set_random_seed
 from utils.const_hm import IMG_DIM, BUCKET_SIZE
 
+import numpy as np
 from sklearn.metrics import roc_auc_score
 
 
@@ -216,14 +217,14 @@ def main(opts):
                                     padded_id = id_
                                     if len(id_) == 4:
                                         padded_id = "0" + str(id_)
-                                    f.write(f'{padded_id},{prob},{pred},{label}\n')
+                                    f.write(f'{padded_id},{str(np.round(prob, 4))},{pred},{label}\n')
                             else:
                                 f.write("id,proba,label\n")
                                 for id_, pred, prob in results:
                                     padded_id = id_
                                     if len(id_) == 4:
                                         padded_id = "0" + str(id_)
-                                    f.write(f'{padded_id},{prob},{pred}\n')
+                                    f.write(f'{padded_id},{str(np.round(prob, 4))},{pred}\n')
                         TB_LOGGER.log_scaler_dict(log)
                     model_saver.save(model, global_step)
             if global_step >= opts.num_train_steps:
@@ -246,14 +247,14 @@ def main(opts):
                     padded_id = id_
                     if len(id_) == 4:
                         padded_id = "0" + str(id_)
-                    f.write(f'{padded_id},{prob},{pred},{label}\n')
+                    f.write(f'{padded_id},{str(np.round(prob, 4))},{pred},{label}\n')
             else:
                 f.write("id,proba,label\n")
                 for id_, pred, prob in results:
                     padded_id = id_
                     if len(id_) == 4:
                         padded_id = "0" + str(id_)
-                    f.write(f'{padded_id},{prob},{pred}\n')
+                    f.write(f'{padded_id},{str(np.round(prob, 4))},{pred}\n')
         TB_LOGGER.log_scaler_dict(log)
     model_saver.save(model, f'{global_step}_final')
 
