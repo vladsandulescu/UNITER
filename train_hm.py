@@ -22,8 +22,10 @@ from tqdm import tqdm
 from data import (DistributedTokenBucketSampler,
                   HMDataset, HMEvalDataset, HMTestDataset,
                   hm_collate, hm_eval_collate, hm_test_collate,
+                  HMPairedDataset, HMPairedEvalDataset, HMPairedTestDataset,
+                  hm_paired_collate, hm_paired_eval_collate, hm_paired_test_collate,
                   PrefetchLoader)
-from model.hm import (UniterForHm)
+from model.hm import (UniterForHm, UniterForHmPaired, UniterForHmPairedAttn)
 from optim import get_lr_sched
 from optim.misc import build_optimizer
 
@@ -80,13 +82,24 @@ def main(opts):
 
     set_random_seed(opts.seed)
 
-    DatasetCls = HMDataset
-    EvalDatasetCls = HMEvalDataset
-    TestDatasetCls = HMTestDataset
-    collate_fn = hm_collate
-    eval_collate_fn = hm_eval_collate
-    test_collate_fn = hm_test_collate
-    if opts.model == 'cls':
+    if 'paired' in opts.model:
+        DatasetCls = HMPairedDataset
+        EvalDatasetCls = HMPairedEvalDataset
+        TestDatasetCls = HMPairedTestDataset
+        collate_fn = hm_paired_collate
+        eval_collate_fn = hm_paired_eval_collate
+        test_collate_fn = hm_paired_test_collate
+    if opts.model == 'paired':
+        ModelCls = UniterForHmPaired
+    elif opts.model == 'paired-attn':
+        ModelCls = UniterForHmPairedAttn
+    elif opts.model == 'cls':
+        DatasetCls = HMDataset
+        EvalDatasetCls = HMEvalDataset
+        TestDatasetCls = HMTestDataset
+        collate_fn = hm_collate
+        eval_collate_fn = hm_eval_collate
+        test_collate_fn = hm_test_collate
         ModelCls = UniterForHm
     else:
         raise ValueError('unrecognized model type')
@@ -276,11 +289,15 @@ def validate(model, val_loader, split):
         del batch['img_ids']
         scores = model(**batch, targets=None, compute_loss=False)
         if not test_mode:
-            loss = F.binary_cross_entropy_with_logits(scores, targets.to(dtype=scores.dtype), reduction='sum')
+            # loss = F.binary_cross_entropy_with_logits(scores, targets.to(dtype=scores.dtype), reduction='sum')
+            loss = F.cross_entropy(scores, targets, reduction='sum')
             val_loss += loss.item()
-            tot_score += ((scores > 0.5).to(dtype=targets.dtype) == targets).sum().item()
-        probs = torch.sigmoid(scores).cpu().tolist()
-        predictions = [1 if prob > 0.5 else 0 for prob in probs]
+            tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets).sum().item()
+        predictions = scores.max(dim=-1, keepdim=False)[1].cpu().tolist()
+        probs = F.softmax(scores, dim=1)[:, 1].cpu().tolist()
+        #     tot_score += ((scores > 0.5).to(dtype=targets.dtype) == targets).sum().item()
+        # probs = torch.sigmoid(scores).cpu().tolist()
+        # predictions = [1 if prob > 0.5 else 0 for prob in probs]
         if not test_mode:
             labels = targets.cpu().tolist()
             results.extend(zip(img_ids, predictions, probs, labels))
