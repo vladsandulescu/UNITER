@@ -9,7 +9,7 @@
     "model": "cls",
     "use_img_type": false,
     "output_dir": "/work1/paupo/playground/hmm/lib/UNITER/output/hm/large",
-     "max_txt_len": 60,
+    "max_txt_len": 60,
     "conf_th": 0.2,
     "max_bb": 100,
     "min_bb": 10,
