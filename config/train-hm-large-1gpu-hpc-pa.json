@@ -29,7 +29,7 @@
     "weight_decay": 0.01,
     "grad_norm": 2.0,
     "warmup_steps": 240,
-    "seed": 77,
+    "seed": 24,
     "fp16": true,
     "n_workers": 4,
     "pin_mem": true
