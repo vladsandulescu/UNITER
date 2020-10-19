@@ -220,7 +220,7 @@ def main(opts):
                     for split, loader in [('val', val_dataloader), ('test', test_dataloader)]:
                         LOGGER.info(f"Step {global_step}: start running "
                                     f"validation on {split} split...")
-                        log, results = validate(model, loader, split)
+                        log, results, results_logits = validate(model, loader, split)
                         with open(f'{opts.output_dir}/results/'
                                   f'{split}_results_{global_step}_'
                                   f'rank{rank}.csv', 'w') as f:
@@ -238,6 +238,25 @@ def main(opts):
                                     if len(id_) == 4:
                                         padded_id = "0" + str(id_)
                                     f.write(f'{padded_id},{str(np.round(prob, 4))},{pred}\n')
+
+                        with open(f'{opts.output_dir}/results/'
+                                  f'{split}_results_logits_{global_step}_'
+                                  f'rank{rank}.csv', 'w') as f:
+                            if split != 'test':
+                                f.write("id,proba,label,target,logit_0,logit_1\n")
+                                for id_, pred, prob, label, logits in results_logits:
+                                    padded_id = id_
+                                    if len(id_) == 4:
+                                        padded_id = "0" + str(id_)
+                                    f.write(f'{padded_id},{str(np.round(prob, 4))},{pred},{label},{logits[0]},{logits[1]}\n')
+                            else:
+                                f.write("id,proba,label,logit_0,logit_1\n")
+                                for id_, pred, prob, logits in results_logits:
+                                    padded_id = id_
+                                    if len(id_) == 4:
+                                        padded_id = "0" + str(id_)
+                                    f.write(f'{padded_id},{str(np.round(prob, 4))},{pred},{logits[0]},{logits[1]}\n')
+
                         TB_LOGGER.log_scaler_dict(log)
                     model_saver.save(model, global_step)
             if global_step >= opts.num_train_steps:
@@ -250,7 +269,7 @@ def main(opts):
     for split, loader in [('val', val_dataloader), ('test', test_dataloader)]:
         LOGGER.info(f"Step {global_step}: start running "
                     f"validation on {split} split...")
-        log, results = validate(model, loader, split)
+        log, results, results_logits = validate(model, loader, split)
         with open(f'{opts.output_dir}/results/'
                   f'{split}_results_{global_step}_'
                   f'rank{rank}_final.csv', 'w') as f:
@@ -280,6 +299,7 @@ def validate(model, val_loader, split):
     n_ex = 0
     st = time()
     results = []
+    results_logits = []
     test_mode = (split == 'test')
     for i, batch in enumerate(val_loader):
         img_ids = batch['img_ids']
@@ -295,14 +315,17 @@ def validate(model, val_loader, split):
             tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets).sum().item()
         predictions = scores.max(dim=-1, keepdim=False)[1].cpu().tolist()
         probs = F.softmax(scores, dim=1)[:, 1].cpu().tolist()
+        logits = scores.cpu().tolist()
         #     tot_score += ((scores > 0.5).to(dtype=targets.dtype) == targets).sum().item()
         # probs = torch.sigmoid(scores).cpu().tolist()
         # predictions = [1 if prob > 0.5 else 0 for prob in probs]
         if not test_mode:
             labels = targets.cpu().tolist()
             results.extend(zip(img_ids, predictions, probs, labels))
+            results_logits.extend(zip(img_ids, predictions, probs, labels, logits))
         else:
             results.extend(zip(img_ids, predictions, probs))
+            results_logits.extend(zip(img_ids, predictions, probs, logits))
         n_ex += len(img_ids)
     if not test_mode:
         val_loss = sum(all_gather_list(val_loss))
@@ -322,9 +345,9 @@ def validate(model, val_loader, split):
         model.train()
         LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
                     f"val Acc: {val_acc:.4f}, val AUROC: {val_auroc:.4f}")
-        return val_log, results
+        return val_log, results, results_logits
     else:
-        return {f'generate/{split}': 1}, results
+        return {f'generate/{split}': 1}, results, results_logits
 
 
 if __name__ == "__main__":
