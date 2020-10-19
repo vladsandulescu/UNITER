@@ -38,16 +38,18 @@ class HMDataset(Dataset):
                  test_mode=False, **kwargs):
         super(HMDataset, self).__init__()
 
+        # # Phase 1
+        # precomputed_boxes = {
+        #     "train": "data_train_d2_36-36_batch.tsv",
+        #     "dev": "data_dev_d2_36-36_batch.tsv",
+        #     "test": "data_test_d2_36-36_batch.tsv",
+        # }
+
+        # # Phase 2
         precomputed_boxes = {
-            # "train": "tiny_data_train_d2_36-36_batch.tsv",
-            # "dev": "tiny_data_dev_d2_36-36_batch.tsv",
-            # "test": "tiny_data_test_d2_36-36_batch.tsv",
-            "train": "data_train_d2_36-36_batch.tsv",
-            "dev": "data_dev_d2_36-36_batch.tsv",
-            "test": "data_test_d2_36-36_batch.tsv",
-            # "train": "data_train_d2_10-100_batch.tsv",
-            # "dev": "data_dev_d2_10-100_batch.tsv",
-            # "test": "data_test_d2_10-100_batch.tsv",
+            "train": "data_train_d2_36-36.tsv",
+            "dev": "data_dev_seen_unseen_d2_36-36.tsv",
+            "test": "data_test_unseen_d2_36-36.tsv",
         }
 
         self.boxes = boxes
@@ -131,19 +133,22 @@ class HMDataset(Dataset):
                 reader = csv.DictReader(tsv_in_file, delimiter='\t',
                                         fieldnames=TRAIN_VAL_FIELDNAMES if not self.test_mode else TEST_FIELDNAMES)
                 for item in reader:
-                    idb = {'img_id': str(item['img_id']),
-                           'img': str(item['img']),
-                           'text': str(item['text']),
-                           'label': int(item['label']) if not self.test_mode else None,
-                           'img_h': int(item['img_h']),
-                           'img_w': int(item['img_w']),
-                           'num_boxes': int(item['num_boxes']),
-                           'boxes': np.frombuffer(base64.decodebytes(item['boxes'].encode()),
-                                                  dtype=np.float32).reshape((int(item['num_boxes']), -1)),
-                           'features': np.frombuffer(base64.decodebytes(item['features'].encode()),
-                                                     dtype=np.float32).reshape((int(item['num_boxes']), -1))
-                           }
-                    in_data.append(idb)
+                    try:
+                        idb = {'img_id': str(item['img_id']),
+                               'img': str(item['img']),
+                               'text': str(item['text']),
+                               'label': int(item['label']) if not self.test_mode else None,
+                               'img_h': int(item['img_h']),
+                               'img_w': int(item['img_w']),
+                               'num_boxes': int(item['num_boxes']),
+                               'boxes': np.frombuffer(base64.decodebytes(item['boxes'].encode()),
+                                                      dtype=np.float32).reshape((int(item['num_boxes']), -1)),
+                               'features': np.frombuffer(base64.decodebytes(item['features'].encode()),
+                                                         dtype=np.float32).reshape((int(item['num_boxes']), -1))
+                               }
+                        in_data.append(idb)
+                    except:
+                        print('Some error occured reading img id {}, skipping it.'.format(str(item['img_id'])))
             self.box_bank[box_file] = in_data
 
             return in_data
@@ -240,20 +245,26 @@ class HMPairedDataset(Dataset):
                  test_mode=False, **kwargs):
         super(HMPairedDataset, self).__init__()
 
+        # # Phase 1
+        # precomputed_boxes = {
+        #     "train": "data_train_d2_36-36_batch.tsv",
+        #     "dev": "data_dev_d2_36-36_batch.tsv",
+        #     "test": "data_test_d2_36-36_batch.tsv",
+        # }
+        # df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_phase_1.csv'))
+
+        # Phase 2
         precomputed_boxes = {
-            # "train": "tiny_data_train_d2_36-36_batch.tsv",
-            # "dev": "tiny_data_dev_d2_36-36_batch.tsv",
-            # "test": "tiny_data_test_d2_36-36_batch.tsv",
-            "train": "data_train_d2_36-36_batch.tsv",
-            "dev": "data_dev_d2_36-36_batch.tsv",
-            "test": "data_test_d2_36-36_batch.tsv",
-            # "train": "data_train_d2_10-100_batch.tsv",
-            # "dev": "data_dev_d2_10-100_batch.tsv",
-            # "test": "data_test_d2_10-100_batch.tsv",
+            "train": "data_train_d2_10-100.tsv",
+            "dev": "data_dev_seen_unseen_d2_10-100.tsv",
+            "test": "data_test_unseen_d2_10-100.tsv",
         }
-        df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df.csv'))
-        df_captions['id'] = df_captions['id'].str.replace('/work1/paupo/playground/hmm/data/img/', '').str.replace(
-            '.png', '')
+        df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_phase_2.csv'))
+
+        df_captions['id'] = df_captions['id']. \
+            str.replace(os.path.join(data_path, 'img/'), ''). \
+            str.replace('.png', '')
+
         df_captions['caption'] = df_captions['cap0']
         self.df_captions = df_captions[['id', 'caption']]
 
@@ -363,19 +374,22 @@ class HMPairedDataset(Dataset):
                 reader = csv.DictReader(tsv_in_file, delimiter='\t',
                                         fieldnames=TRAIN_VAL_FIELDNAMES if not self.test_mode else TEST_FIELDNAMES)
                 for item in reader:
-                    idb = {'img_id': str(item['img_id']),
-                           'img': str(item['img']),
-                           'text': str(item['text']),
-                           'label': int(item['label']) if not self.test_mode else None,
-                           'img_h': int(item['img_h']),
-                           'img_w': int(item['img_w']),
-                           'num_boxes': int(item['num_boxes']),
-                           'boxes': np.frombuffer(base64.decodebytes(item['boxes'].encode()),
-                                                  dtype=np.float32).reshape((int(item['num_boxes']), -1)),
-                           'features': np.frombuffer(base64.decodebytes(item['features'].encode()),
-                                                     dtype=np.float32).reshape((int(item['num_boxes']), -1))
-                           }
-                    in_data.append(idb)
+                    try:
+                        idb = {'img_id': str(item['img_id']),
+                               'img': str(item['img']),
+                               'text': str(item['text']),
+                               'label': int(item['label']) if not self.test_mode else None,
+                               'img_h': int(item['img_h']),
+                               'img_w': int(item['img_w']),
+                               'num_boxes': int(item['num_boxes']),
+                               'boxes': np.frombuffer(base64.decodebytes(item['boxes'].encode()),
+                                                      dtype=np.float32).reshape((int(item['num_boxes']), -1)),
+                               'features': np.frombuffer(base64.decodebytes(item['features'].encode()),
+                                                         dtype=np.float32).reshape((int(item['num_boxes']), -1))
+                               }
+                        in_data.append(idb)
+                    except:
+                        print('Some error occured reading img id {}, skipping it.'.format(str(item['img_id'])))
             self.box_bank[box_file] = in_data
 
             return in_data

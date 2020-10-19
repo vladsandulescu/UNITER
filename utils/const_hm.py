@@ -5,4 +5,4 @@ Licensed under the MIT license.
 constants
 """
 IMG_DIM = 2048
-BUCKET_SIZE = 9000
+BUCKET_SIZE = 10000
