@@ -47,9 +47,9 @@ class HMDataset(Dataset):
 
         # # Phase 2
         precomputed_boxes = {
-            "train": "data_train_d2_36-36.tsv",
-            "dev": "data_dev_seen_unseen_d2_36-36.tsv",
-            "test": "data_test_unseen_d2_36-36.tsv",
+            "train": "data_train_d2_10-100.tsv",
+            "dev": "data_dev_seen_unseen_d2_10-100.tsv",
+            "test": "data_test_unseen_d2_10-100.tsv",
         }
 
         self.boxes = boxes
