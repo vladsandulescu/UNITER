@@ -251,7 +251,7 @@ class HMPairedDataset(Dataset):
         #     "dev": "data_dev_d2_36-36_batch.tsv",
         #     "test": "data_test_d2_36-36_batch.tsv",
         # }
-        # df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_phase_1.csv'))
+        # df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_ph1.csv'))
 
         # Phase 2
         precomputed_boxes = {
@@ -259,13 +259,8 @@ class HMPairedDataset(Dataset):
             "dev": "data_dev_seen_unseen_d2_10-100.tsv",
             "test": "data_test_unseen_d2_10-100.tsv",
         }
-        df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_phase_2.csv'))
-
-        df_captions['id'] = df_captions['id']. \
-            str.replace(os.path.join(data_path, 'img/'), ''). \
-            str.replace('.png', '')
-
-        df_captions['caption'] = df_captions['cap0']
+        df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_ph2.csv'))
+        df_captions['id'] = df_captions['id'].str.replace('.png', '')
         self.df_captions = df_captions[['id', 'caption']]
 
         self.boxes = boxes
