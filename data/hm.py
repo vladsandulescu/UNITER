@@ -38,19 +38,19 @@ class HMDataset(Dataset):
                  test_mode=False, **kwargs):
         super(HMDataset, self).__init__()
 
-        # # Phase 1
-        # precomputed_boxes = {
-        #     "train": "data_train_d2_36-36_batch.tsv",
-        #     "dev": "data_dev_d2_36-36_batch.tsv",
-        #     "test": "data_test_d2_36-36_batch.tsv",
-        # }
+        # Phase 1
+        precomputed_boxes = {
+            "train": "data_train_d2_10-100_vg.tsv",
+            "dev": "data_dev_d2_10-100_vg.tsv",
+            "test": "data_test_d2_10-100_vg.tsv",
+        }
 
         # # Phase 2
-        precomputed_boxes = {
-            "train": "data_train_d2_10-100.tsv",
-            "dev": "data_dev_seen_unseen_d2_10-100.tsv",
-            "test": "data_test_unseen_d2_10-100.tsv",
-        }
+        # precomputed_boxes = {
+        #     "train": "data_train_d2_10-100_vg.tsv",
+        #     "dev": "data_dev_seen_unseen_d2_10-100_vg.tsv",
+        #     "test": "data_test_unseen_d2_10-100_vg.tsv",
+        # }
 
         self.boxes = boxes
         self.test_mode = test_mode
@@ -81,24 +81,31 @@ class HMDataset(Dataset):
         # text_ids = torch.tensor(self.tokenizer.convert_tokens_to_ids(tokens))
 
         # image
-        w0, h0 = idb['img_h'], idb['img_w']
         num_boxes = idb['num_boxes']
         boxes = torch.as_tensor(idb['boxes'])
         img_features = torch.as_tensor(idb['features'])
+        img_features = img_features.reshape((num_boxes, -1))
 
-        # normalize boxes coordinates
-        boxes[:, [0, 2]] = boxes[:, [0, 2]] / w0
-        boxes[:, [1, 3]] = boxes[:, [1, 3]] / h0
+        # normalize boxes coordinates, 7-d features
+        image_h, image_w = idb['img_h'], idb['img_w']
+        box_width = boxes[:, 2] - boxes[:, 0]
+        box_height = boxes[:, 3] - boxes[:, 1]
+        scaled_width = box_width / image_w
+        scaled_height = box_height / image_h
+        scaled_x = boxes[:, 0] / image_w
+        scaled_y = boxes[:, 1] / image_h
 
-        # 7-d ROI location features
-        img_pos_features = torch.cat([boxes,
-                                      # box width
-                                      boxes[:, 2:3] - boxes[:, 0:1],
-                                      # box height
-                                      boxes[:, 3:4] - boxes[:, 1:2],
-                                      # box area
-                                      (boxes[:, 2:3] - boxes[:, 0:1]) *
-                                      (boxes[:, 3:4] - boxes[:, 1:2])], dim=-1)
+        scaled_width = scaled_width[..., np.newaxis]
+        scaled_height = scaled_height[..., np.newaxis]
+        scaled_x = scaled_x[..., np.newaxis]
+        scaled_y = scaled_y[..., np.newaxis]
+
+        normalized_bbox = np.concatenate((scaled_x, scaled_y,
+                                          scaled_x + scaled_width,
+                                          scaled_y + scaled_height,
+                                          scaled_width, scaled_height,
+                                          scaled_width * scaled_height), axis=1)
+        img_pos_features = torch.tensor(normalized_bbox).float()
 
         # attention masks
         attn_masks = torch.tensor([1] * (len(text_ids) + num_boxes))
@@ -245,21 +252,22 @@ class HMPairedDataset(Dataset):
                  test_mode=False, **kwargs):
         super(HMPairedDataset, self).__init__()
 
-        # # Phase 1
-        # precomputed_boxes = {
-        #     "train": "data_train_d2_36-36_batch.tsv",
-        #     "dev": "data_dev_d2_36-36_batch.tsv",
-        #     "test": "data_test_d2_36-36_batch.tsv",
-        # }
-        # df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_ph1.csv'))
-
-        # Phase 2
+        # Phase 1
         precomputed_boxes = {
-            "train": "data_train_d2_10-100.tsv",
-            "dev": "data_dev_seen_unseen_d2_10-100.tsv",
-            "test": "data_test_unseen_d2_10-100.tsv",
+            "train": "data_train_d2_10-100_vg.tsv",
+            "dev": "data_dev_d2_10-100_vg.tsv",
+            "test": "data_test_d2_10-100_vg.tsv",
         }
-        df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_ph2.csv'))
+        df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_ph1.csv'))
+
+        # # Phase 2
+        # precomputed_boxes = {
+        #     "train": "data_train_d2_10-100_vg.tsv",
+        #     "dev": "data_dev_seen_unseen_d2_10-100_vg.tsv",
+        #     "test": "data_test_unseen_d2_10-100_vg.tsv",
+        # }
+        # df_captions = pd.read_csv(os.path.join(data_path, 'im2txt/df_ph2.csv'))
+
         df_captions['id'] = df_captions['id'].str.replace('.png', '')
         self.df_captions = df_captions[['id', 'caption']]
 
@@ -316,24 +324,31 @@ class HMPairedDataset(Dataset):
         im2text_ids = torch.tensor(im2text_ids)
 
         # image
-        w0, h0 = idb['img_h'], idb['img_w']
         num_boxes = idb['num_boxes']
         boxes = torch.as_tensor(idb['boxes'])
         img_features = torch.as_tensor(idb['features'])
+        img_features = img_features.reshape((num_boxes, -1))
 
-        # normalize boxes coordinates
-        boxes[:, [0, 2]] = boxes[:, [0, 2]] / w0
-        boxes[:, [1, 3]] = boxes[:, [1, 3]] / h0
+        # normalize boxes coordinates, 7-d features
+        image_h, image_w = idb['img_h'], idb['img_w']
+        box_width = boxes[:, 2] - boxes[:, 0]
+        box_height = boxes[:, 3] - boxes[:, 1]
+        scaled_width = box_width / image_w
+        scaled_height = box_height / image_h
+        scaled_x = boxes[:, 0] / image_w
+        scaled_y = boxes[:, 1] / image_h
 
-        # 7-d ROI location features
-        img_pos_features = torch.cat([boxes,
-                                      # box width
-                                      boxes[:, 2:3] - boxes[:, 0:1],
-                                      # box height
-                                      boxes[:, 3:4] - boxes[:, 1:2],
-                                      # box area
-                                      (boxes[:, 2:3] - boxes[:, 0:1]) *
-                                      (boxes[:, 3:4] - boxes[:, 1:2])], dim=-1)
+        scaled_width = scaled_width[..., np.newaxis]
+        scaled_height = scaled_height[..., np.newaxis]
+        scaled_x = scaled_x[..., np.newaxis]
+        scaled_y = scaled_y[..., np.newaxis]
+
+        normalized_bbox = np.concatenate((scaled_x, scaled_y,
+                                          scaled_x + scaled_width,
+                                          scaled_y + scaled_height,
+                                          scaled_width, scaled_height,
+                                          scaled_width * scaled_height), axis=1)
+        img_pos_features = torch.tensor(normalized_bbox).float()
 
         # attention masks
         attn_masks = torch.tensor([1] * (len(text_ids) + num_boxes))
